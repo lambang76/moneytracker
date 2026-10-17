@@ -81,6 +81,7 @@ function helpText() {
     "/help — daftar perintah",
     "/saldo — lihat saldo saat ini",
     "/terakhir — lihat 5 transaksi terbaru",
+    "/unlink — putuskan tautan Telegram dari akun ini",
     "/expense 25000 | Makan siang | Makanan — catat pengeluaran",
     "/income 500000 | Uang mingguan | Pemasukan — catat pemasukan",
     "Bisa juga kirim singkat: <code>makan siang 25000</code> (pengeluaran).",
@@ -140,6 +141,22 @@ export async function POST(request: Request) {
         ? `Halo! Akun SakuBot kamu sudah terhubung.\n\n${helpText()}`
         : `Halo! Saya bot pencatat keuangan SakuBot.\nTautkan akun dari dashboard dengan mengirim <code>/link KODE</code>.\n\n${helpText()}`);
       return Response.json({ ok: true, command: "help" });
+    }
+
+    if (/^\/(unlink|logout|putuskan)(?:@\w+)?\s*$/i.test(text)) {
+      if (!profile) {
+        await reply(chatId, "Telegram ini belum tertaut ke akun SakuBot.");
+        return Response.json({ ok: true, command: "unlink", linked: false });
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ telegram_chat_id: null })
+        .eq("id", profile.id);
+      if (error) throw error;
+
+      await reply(chatId, "✅ Telegram berhasil diputuskan dari akun SakuBot. Data dan transaksi kamu tetap tersimpan. Untuk menautkan lagi, buat kode baru di dashboard lalu kirim <code>/link KODE</code>.");
+      return Response.json({ ok: true, command: "unlink", linked: false });
     }
 
     if (!profile) {
