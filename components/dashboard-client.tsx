@@ -10,12 +10,14 @@ import {
   Home,
   Link as LinkIcon,
   LogOut,
+  Menu,
   Pencil,
   PieChart,
   Send,
   Settings,
   Trash2,
   Wallet,
+  X,
 } from "lucide-react";
 import {
   Cell,
@@ -40,6 +42,13 @@ export type DashboardTransaction = {
 
 const colors = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#8b5cf6"];
 const formatRupiah = (amount: number) => `Rp ${amount.toLocaleString("id-ID")}`;
+const navigationItems = [
+  { id: "dashboard", label: "Dashboard", icon: Home },
+  { id: "transactions", label: "Transaksi", icon: ArrowRightLeft },
+  { id: "charts", label: "Ringkasan", icon: PieChart },
+  { id: "telegram", label: "Integrasi", icon: LinkIcon },
+  { id: "settings", label: "Pengaturan", icon: Settings },
+];
 
 export default function DashboardClient({
   transactions,
@@ -64,6 +73,10 @@ export default function DashboardClient({
   const [telegramCode, setTelegramCode] = useState("");
   const [telegramMessage, setTelegramMessage] = useState("");
   const [telegramError, setTelegramError] = useState(false);
+  const [activeSection, setActiveSection] = useState("dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [transactionQuery, setTransactionQuery] = useState("");
+  const [transactionFilter, setTransactionFilter] = useState("all");
   const now = new Date();
   const monthTransactions = transactions.filter((tx) => {
     const date = new Date(tx.date);
@@ -94,10 +107,12 @@ export default function DashboardClient({
     }, {}),
   ).map(([name, total]) => ({ name, total }));
 
-  const biggestCategory = categories.reduce(
-    (max, item) => (item.value > max.value ? item : max),
-    { name: "-", value: 0, color: colors[0] },
-  );
+  const visibleTransactions = transactions.filter((tx) => {
+    const query = transactionQuery.trim().toLocaleLowerCase("id-ID");
+    const matchesQuery = !query || `${tx.description} ${tx.category} ${tx.source}`.toLocaleLowerCase("id-ID").includes(query);
+    const matchesFilter = transactionFilter === "all" || tx.transactionType === transactionFilter;
+    return matchesQuery && matchesFilter;
+  });
 
   const refreshTelegramStatus = useCallback(async () => {
     setTelegramLoading(true);
@@ -119,6 +134,27 @@ export default function DashboardClient({
   useEffect(() => {
     void refreshTelegramStatus();
   }, [refreshTelegramStatus]);
+
+  useEffect(() => {
+    const sections = navigationItems
+      .map(({ id }) => document.getElementById(id))
+      .filter((section): section is HTMLElement => section !== null);
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (visible) setActiveSection(visible.target.id);
+    }, { rootMargin: "-15% 0px -65% 0px", threshold: [0, 0.1, 0.3] });
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
+
+  function navigateToSection(id: string) {
+    setActiveSection(id);
+    setMobileMenuOpen(false);
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.history.replaceState(null, "", `#${id}`);
+  }
 
   async function createTelegramLinkCode() {
     setTelegramLoading(true);
@@ -227,38 +263,57 @@ export default function DashboardClient({
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-800">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
-        <div className="flex items-center gap-3 p-6">
-          <div className="rounded-lg bg-indigo-600 p-2"><Wallet className="h-6 w-6 text-white" /></div>
-          <h1 className="text-xl font-bold">SakuBot</h1>
-        </div>
-        <nav className="flex-1 space-y-2 px-4 py-4">
-          <a href="#dashboard" className="flex items-center gap-3 rounded-xl bg-slate-100 px-4 py-3 font-medium text-indigo-600"><Home className="h-5 w-5" />Dashboard</a>
-          <a href="#transactions" className="flex items-center gap-3 rounded-xl px-4 py-3 font-medium text-slate-500 hover:bg-slate-50"><ArrowRightLeft className="h-5 w-5" />Transaksi</a>
-          <a href="#charts" className="flex items-center gap-3 rounded-xl px-4 py-3 font-medium text-slate-500 hover:bg-slate-50"><PieChart className="h-5 w-5" />Ringkasan</a>
-          <a href="#telegram" className="flex items-center gap-3 rounded-xl px-4 py-3 font-medium text-slate-500 hover:bg-slate-50"><LinkIcon className="h-5 w-5" />Integrasi</a>
-          <a href="#settings" className="flex items-center gap-3 rounded-xl px-4 py-3 font-medium text-slate-500 hover:bg-slate-50"><Settings className="h-5 w-5" />Pengaturan</a>
+    <div className="min-h-screen bg-[#f5f7fb] font-sans text-slate-800">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200/80 bg-white md:flex">
+        <button type="button" onClick={() => navigateToSection("dashboard")} className="flex items-center gap-3 p-6 text-left">
+          <div className="rounded-xl bg-indigo-600 p-2.5 shadow-lg shadow-indigo-200"><Wallet className="h-6 w-6 text-white" /></div>
+          <span><span className="block text-xl font-bold tracking-tight">SakuBot</span><span className="block text-xs text-slate-400">Catat uang dengan rapi</span></span>
+        </button>
+        <p className="px-6 pb-2 pt-5 text-[11px] font-bold uppercase tracking-[.16em] text-slate-400">Menu utama</p>
+        <nav aria-label="Navigasi utama" className="flex-1 space-y-1 px-3">
+          {navigationItems.map(({ id, label, icon: Icon }) => (
+            <a key={id} href={`#${id}`} onClick={(event) => { event.preventDefault(); navigateToSection(id); }} aria-current={activeSection === id ? "page" : undefined}
+              className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${activeSection === id ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}>
+              <Icon className={`h-[18px] w-[18px] ${activeSection === id ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600"}`} />{label}
+              {activeSection === id && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-600" />}
+            </a>
+          ))}
         </nav>
-        <div className="border-t border-slate-200 p-4"><form action="/api/auth/sign-out" method="post"><button className="flex w-full items-center gap-3 rounded-xl px-4 py-3 font-medium text-slate-500"><LogOut className="h-5 w-5" />Keluar</button></form></div>
+        <div className="m-3 rounded-2xl bg-slate-50 p-3">
+          <div className="mb-3 flex items-center gap-2.5 px-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold uppercase text-indigo-700">{account.username.slice(0, 1)}</div>
+            <div className="min-w-0"><p className="truncate text-sm font-semibold">@{account.username}</p><p className="truncate text-xs text-slate-500">{account.email}</p></div>
+          </div>
+          <form action="/api/auth/sign-out" method="post"><button className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-slate-500 transition hover:bg-white hover:text-rose-600"><LogOut className="h-4 w-4" />Keluar</button></form>
+        </div>
       </aside>
 
-      <main id="dashboard" className="min-w-0 flex-1 overflow-y-auto p-5 md:p-8">
+      <main className="min-w-0 md:ml-64">
+        <div className="mx-auto max-w-[1440px] px-4 py-5 sm:px-6 md:px-8 md:py-8">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-2xl font-bold">Dashboard</h2>
+          <div className="flex items-center gap-3">
+            <button type="button" aria-label={mobileMenuOpen ? "Tutup menu" : "Buka menu"} aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm md:hidden">
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+            <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-indigo-600">SakuBot</p><h2 className="text-2xl font-bold tracking-tight">Dashboard</h2></div>
+          </div>
           <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-600"><Send className="h-4 w-4" />Input via Telegram</div>
-            <div className="font-medium capitalize text-slate-500">{now.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</div>
-            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-3">
+            <button type="button" onClick={() => navigateToSection("telegram")} className="hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:flex"><Send className="h-4 w-4" />Input via Telegram</button>
+            <div className="hidden font-medium capitalize text-slate-500 sm:block">{now.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</div>
+            <button type="button" onClick={() => navigateToSection("settings")} className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-left shadow-sm transition hover:border-indigo-200 sm:flex">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold uppercase text-indigo-700">{account.username.slice(0, 1)}</div>
               <div className="leading-tight"><p className="text-sm font-semibold text-slate-800">@{account.username}</p><p className="max-w-48 truncate text-xs text-slate-500">{account.email}</p></div>
-            </div>
+            </button>
           </div>
         </header>
 
+        {mobileMenuOpen && <nav aria-label="Navigasi utama" className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/60 md:hidden">
+          {navigationItems.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} onClick={(event) => { event.preventDefault(); navigateToSection(id); }} className={`flex items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold ${activeSection === id ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="h-4 w-4" />{label}</a>)}
+        </nav>}
+
         {loadError && <div role="status" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{loadError}</div>}
 
-        <section aria-label="Saldo dan akun" className="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <section id="dashboard" aria-label="Saldo dan akun" className="mb-8 scroll-mt-8 grid grid-cols-1 gap-5 lg:grid-cols-3">
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-700 p-6 text-white shadow-lg shadow-indigo-200 lg:col-span-2">
             <div className="absolute -right-8 -top-16 h-52 w-52 rounded-full border-[28px] border-white/10" />
             <div className="relative flex items-start justify-between gap-4">
@@ -272,7 +327,7 @@ export default function DashboardClient({
           </div>
         </section>
 
-        <section id="telegram" className="mb-8 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <section id="telegram" className="mb-8 scroll-mt-8 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h3 className="text-lg font-bold">Hubungkan Telegram</h3>
@@ -292,7 +347,7 @@ export default function DashboardClient({
           {telegramLinked && <p className="mt-3 text-xs text-slate-500">Untuk mencatat transaksi, kirim contoh: /expense 25000 | Makan siang | Makanan</p>}
         </section>
 
-        <section className="mb-8 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <section id="add-transaction" className="mb-8 scroll-mt-8 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40">
           <h3 className="mb-4 text-lg font-bold">Tambah transaksi</h3>
           <form onSubmit={addTransaction} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <label className="text-sm font-medium text-slate-600">Jenis
@@ -315,14 +370,14 @@ export default function DashboardClient({
           {formMessage && <p role="status" className={`mt-3 text-sm ${formError ? "text-red-600" : "text-emerald-600"}`}>{formMessage}</p>}
         </section>
 
-        <section className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-label="Ringkasan bulan ini" className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"><div className="mb-4 flex items-center justify-between text-slate-500"><span className="font-medium">Pemasukan bulan ini</span><ArrowDownRight className="h-5 w-5 rotate-180 text-emerald-500" /></div><div className="text-2xl font-bold text-emerald-600">{formatRupiah(incomeTotal)}</div></div>
           <div className="flex flex-col justify-between rounded-2xl bg-red-500 p-6 text-white shadow-sm"><div className="mb-4 flex items-center justify-between text-red-100"><span className="font-medium">Pengeluaran bulan ini</span><ArrowDownRight className="h-5 w-5" /></div><div className="text-2xl font-bold">{formatRupiah(expenseTotal)}</div></div>
           <div className="flex flex-col justify-between rounded-2xl bg-indigo-600 p-6 text-white shadow-sm"><div className="mb-4 flex items-center justify-between text-indigo-100"><span className="font-medium">Selisih bulan ini</span><Wallet className="h-5 w-5" /></div><div className="text-2xl font-bold">{formatRupiah(netTotal)}</div></div>
           <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"><div className="mb-4 flex items-center justify-between text-slate-500"><span className="font-medium">Transaksi bulan ini</span><ArrowRightLeft className="h-5 w-5" /></div><div className="text-2xl font-bold">{monthTransactions.length}</div></div>
         </section>
 
-        <section id="charts" className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section id="charts" className="mb-8 scroll-mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm lg:col-span-2"><h3 className="mb-6 text-lg font-bold">Tren pengeluaran bulan ini</h3><div className="h-64">
             {daily.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={daily}><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} /><Tooltip formatter={(value) => [formatRupiah(Number(value)), "Pengeluaran"]} /><Line type="monotone" dataKey="total" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4 }} /></LineChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-slate-400">Belum ada pengeluaran bulan ini</div>}
           </div></div>
@@ -331,8 +386,12 @@ export default function DashboardClient({
           </div><div className="mt-4 flex flex-wrap justify-center gap-3">{categories.map((item) => <div key={item.name} className="flex items-center gap-1.5 text-xs font-medium text-slate-600"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</div>)}</div></div>
         </section>
 
-        <section id="transactions" className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm"><div className="border-b border-slate-100 p-6"><h3 className="text-lg font-bold">Transaksi terakhir</h3>{deleteMessage && <p role="status" className={`mt-2 text-sm ${deleteError ? "text-red-600" : "text-emerald-600"}`}>{deleteMessage}</p>}</div><div className="overflow-x-auto"><table className="w-full border-collapse text-left"><thead><tr className="bg-slate-50 text-sm text-slate-500"><th className="px-6 py-4 font-medium">Tanggal</th><th className="px-6 py-4 font-medium">Deskripsi</th><th className="px-6 py-4 font-medium">Kategori</th><th className="px-6 py-4 font-medium">Nominal</th><th className="px-6 py-4 font-medium">Sumber</th><th className="px-6 py-4 text-right font-medium">Aksi</th></tr></thead><tbody className="text-sm">
-          {transactions.length ? transactions.map((tx) => editingId === tx.id ? (
+        <section id="transactions" className="mb-8 scroll-mt-8 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm shadow-slate-200/40"><div className="border-b border-slate-100 p-6"><h3 className="text-lg font-bold">Transaksi</h3><p className="mt-1 text-sm text-slate-500">Cari, filter, dan kelola catatan keuanganmu.</p>{deleteMessage && <p role="status" className={`mt-2 text-sm ${deleteError ? "text-red-600" : "text-emerald-600"}`}>{deleteMessage}</p>}</div><div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 p-4 sm:flex-row">
+          <input aria-label="Cari transaksi" value={transactionQuery} onChange={(event) => setTransactionQuery(event.target.value)} placeholder="Cari deskripsi atau kategori..." className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
+          <select aria-label="Filter jenis transaksi" value={transactionFilter} onChange={(event) => setTransactionFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"><option value="all">Semua transaksi</option><option value="expense">Pengeluaran</option><option value="income">Pemasukan</option></select>
+          <button type="button" onClick={() => navigateToSection("add-transaction")} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">+ Tambah transaksi</button>
+        </div><div className="overflow-x-auto"><table className="w-full border-collapse text-left"><thead><tr className="bg-slate-50 text-sm text-slate-500"><th className="px-6 py-4 font-medium">Tanggal</th><th className="px-6 py-4 font-medium">Deskripsi</th><th className="px-6 py-4 font-medium">Kategori</th><th className="px-6 py-4 font-medium">Nominal</th><th className="px-6 py-4 font-medium">Sumber</th><th className="px-6 py-4 text-right font-medium">Aksi</th></tr></thead><tbody className="text-sm">
+          {visibleTransactions.length ? visibleTransactions.map((tx) => editingId === tx.id ? (
             <tr key={tx.id} className="border-b border-indigo-100 bg-indigo-50/50"><td colSpan={6} className="p-4">
               <form onSubmit={(event) => updateTransaction(event, tx.id)} className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-6">
                 <label className="text-xs font-medium text-slate-600">Jenis<select name="transactionType" defaultValue={tx.transactionType} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="expense">Pengeluaran</option><option value="income">Pemasukan</option></select></label>
@@ -342,8 +401,25 @@ export default function DashboardClient({
                 <div className="flex gap-2"><button type="submit" disabled={updating} className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{updating ? "Menyimpan..." : "Simpan"}</button><button type="button" disabled={updating} onClick={() => setEditingId(null)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Batal</button></div>
               </form>
             </td></tr>
-          ) : <tr key={tx.id} className="border-b border-slate-50 hover:bg-slate-50"><td className="whitespace-nowrap px-6 py-4 text-slate-500">{new Date(tx.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</td><td className="px-6 py-4 font-medium">{tx.description}</td><td className="px-6 py-4 text-slate-600">{tx.category} <span className="ml-1 text-xs text-slate-400">| {tx.transactionType === "income" ? "Pemasukan" : "Pengeluaran"}</span></td><td className={`whitespace-nowrap px-6 py-4 font-semibold ${tx.transactionType === "income" ? "text-emerald-600" : "text-red-500"}`}>{tx.transactionType === "income" ? "+" : "-"} {formatRupiah(tx.amount)}</td><td className="whitespace-nowrap px-6 py-4"><span className="flex items-center gap-1.5 text-slate-600">{tx.source === "Telegram" ? <Send className="h-4 w-4 text-blue-500" /> : <CheckCircle2 className="h-4 w-4 text-emerald-500" />}{tx.source}</span></td><td className="px-6 py-3 text-right"><div className="inline-flex items-center"><button type="button" onClick={() => { setDeleteMessage(""); setEditingId(tx.id); }} aria-label={`Edit transaksi ${tx.description}`} title="Edit transaksi" className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => deleteTransaction(tx)} disabled={deletingId === tx.id || editingId === tx.id} aria-label={`Hapus transaksi ${tx.description}`} title="Hapus transaksi" className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"><Trash2 className="h-4 w-4" /></button></div></td></tr>) : <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-400">Belum ada transaksi. Tambahkan lewat formulir di atas atau Telegram.</td></tr>}
+          ) : <tr key={tx.id} className="border-b border-slate-50 hover:bg-slate-50"><td className="whitespace-nowrap px-6 py-4 text-slate-500">{new Date(tx.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</td><td className="px-6 py-4 font-medium">{tx.description}</td><td className="px-6 py-4 text-slate-600">{tx.category} <span className="ml-1 text-xs text-slate-400">| {tx.transactionType === "income" ? "Pemasukan" : "Pengeluaran"}</span></td><td className={`whitespace-nowrap px-6 py-4 font-semibold ${tx.transactionType === "income" ? "text-emerald-600" : "text-red-500"}`}>{tx.transactionType === "income" ? "+" : "-"} {formatRupiah(tx.amount)}</td><td className="whitespace-nowrap px-6 py-4"><span className="flex items-center gap-1.5 text-slate-600">{tx.source === "Telegram" ? <Send className="h-4 w-4 text-blue-500" /> : <CheckCircle2 className="h-4 w-4 text-emerald-500" />}{tx.source}</span></td><td className="px-6 py-3 text-right"><div className="inline-flex items-center"><button type="button" onClick={() => { setDeleteMessage(""); setEditingId(tx.id); }} aria-label={`Edit transaksi ${tx.description}`} title="Edit transaksi" className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => deleteTransaction(tx)} disabled={deletingId === tx.id || editingId === tx.id} aria-label={`Hapus transaksi ${tx.description}`} title="Hapus transaksi" className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"><Trash2 className="h-4 w-4" /></button></div></td></tr>) : <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-400">{transactions.length ? "Tidak ada transaksi yang cocok dengan pencarian atau filter." : "Belum ada transaksi. Tambahkan lewat formulir di atas atau Telegram."}</td></tr>}
         </tbody></table></div></section>
+        <section id="settings" className="scroll-mt-8 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40">
+          <div className="mb-5"><h3 className="text-lg font-bold">Pengaturan</h3><p className="mt-1 text-sm text-slate-500">Kelola akun dan preferensi pencatatanmu.</p></div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
+              <div className="flex items-start gap-3"><div className="rounded-xl bg-indigo-100 p-2.5 text-indigo-700"><CircleUserRound className="h-5 w-5" /></div><div><h4 className="font-semibold">Akun SakuBot</h4><p className="mt-1 text-sm text-slate-500">Informasi akun yang sedang digunakan.</p></div></div>
+              <dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-slate-500">Username</dt><dd className="font-semibold">@{account.username}</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-500">Email</dt><dd className="max-w-[65%] truncate font-semibold">{account.email}</dd></div></dl>
+              <form action="/api/auth/sign-out" method="post" className="mt-5 border-t border-slate-200 pt-4"><button className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"><LogOut className="h-4 w-4" />Keluar dari akun</button></form>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
+              <div className="flex items-start gap-3"><div className="rounded-xl bg-emerald-100 p-2.5 text-emerald-700"><Wallet className="h-5 w-5" /></div><div><h4 className="font-semibold">Preferensi pencatatan</h4><p className="mt-1 text-sm text-slate-500">Semua nominal disimpan sebagai rupiah Indonesia.</p></div></div>
+              <dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-slate-500">Mata uang</dt><dd className="font-semibold">Rupiah (IDR)</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-500">Zona waktu tampilan</dt><dd className="font-semibold">Waktu lokal</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-500">Telegram</dt><dd className={`font-semibold ${telegramLinked ? "text-emerald-700" : "text-slate-500"}`}>{telegramLinked ? "Terhubung" : "Belum terhubung"}</dd></div></dl>
+              <button type="button" onClick={() => navigateToSection("telegram")} className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">Kelola integrasi Telegram</button>
+            </div>
+          </div>
+        </section>
+        <footer className="py-8 text-center text-xs text-slate-400">SakuBot · Catat uang dengan rapi</footer>
+        </div>
       </main>
     </div>
   );
