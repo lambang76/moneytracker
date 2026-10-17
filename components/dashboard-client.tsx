@@ -370,7 +370,7 @@ export default function DashboardClient({
           {telegramLinked && <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800"><b>Sudah terhubung.</b> Catat transaksi lewat chat, atau kirim <code>/unlink</code> ke bot untuk memutus koneksi.</div>}
         </section>
         <section className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40"><h3 className="text-lg font-bold">Perintah bot</h3><p className="mt-1 text-sm text-slate-500">Pakai perintah ini di chat pribadi dengan bot SakuBot.</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{[
-          ["/saldo", "Lihat saldo saat ini"], ["/terakhir", "Lihat 5 transaksi terbaru"], ["/expense 25000 | Makan siang | Makanan", "Catat pengeluaran"], ["/income 500000 | Uang mingguan | Pemasukan", "Catat pemasukan"], ["/unlink", "Putuskan akun Telegram"],
+          ["/saldo", "Lihat saldo saat ini"], ["/hari_ini", "Ringkasan hari ini"], ["/bulan_ini", "Ringkasan bulan ini"], ["/kategori", "Pengeluaran per kategori"], ["/terakhir", "Lihat 5 transaksi terbaru"], ["/expense 25000 | Makan siang | Makanan", "Catat pengeluaran"], ["/income 500000 | Uang mingguan | Pemasukan", "Catat pemasukan"], ["/unlink", "Putuskan akun Telegram"],
         ].map(([command, description]) => <div key={command} className="flex flex-col gap-1 rounded-xl bg-slate-50 p-4"><code className="break-all text-sm font-semibold text-indigo-700">{command}</code><span className="text-xs text-slate-500">{description}</span></div>)}</div><p className="mt-4 text-xs text-slate-500">Format singkat pengeluaran juga didukung, misalnya <code>makan siang 25000</code>.</p></section>
         </>}
 

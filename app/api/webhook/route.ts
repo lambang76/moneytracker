@@ -8,6 +8,20 @@ type TelegramUpdate = {
 };
 
 type TransactionType = "income" | "expense";
+type ReportPeriod = "day" | "month";
+
+const botCommands = [
+  { command: "start", description: "Mulai dan lihat panduan SakuBot" },
+  { command: "help", description: "Tampilkan daftar perintah" },
+  { command: "saldo", description: "Lihat saldo saat ini" },
+  { command: "hari_ini", description: "Ringkasan transaksi hari ini" },
+  { command: "bulan_ini", description: "Ringkasan transaksi bulan ini" },
+  { command: "kategori", description: "Pengeluaran terbesar per kategori" },
+  { command: "terakhir", description: "Lihat 5 transaksi terbaru" },
+  { command: "expense", description: "Catat pengeluaran baru" },
+  { command: "income", description: "Catat pemasukan baru" },
+  { command: "unlink", description: "Putuskan tautan akun Telegram" },
+];
 
 function isAuthorized(request: Request) {
   const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -36,6 +50,42 @@ async function reply(chatId: number, text: string) {
   } catch (error) {
     console.error("Tidak dapat mengirim balasan Telegram:", error);
   }
+}
+
+async function registerBotCommands() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ scope: { type: "all_private_chats" }, commands: botCommands }),
+      cache: "no-store",
+    });
+    const result = await response.json() as { ok?: boolean; description?: string };
+    if (!response.ok || !result.ok) console.error("Telegram setMyCommands gagal:", result.description ?? response.statusText);
+  } catch (error) {
+    console.error("Tidak dapat mendaftarkan command Telegram:", error);
+  }
+}
+
+function jakartaPeriodBounds(period: ReportPeriod) {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, Number(value)]));
+  const offset = 7 * 60 * 60 * 1000;
+  const startMs = period === "day"
+    ? Date.UTC(values.year, values.month - 1, values.day) - offset
+    : Date.UTC(values.year, values.month - 1, 1) - offset;
+  const endMs = period === "day"
+    ? Date.UTC(values.year, values.month - 1, values.day + 1) - offset
+    : Date.UTC(values.year, values.month, 1) - offset;
+  return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString(), now };
 }
 
 function escapeHtml(value: string) {
@@ -77,6 +127,9 @@ function parseTransaction(text: string) {
 function helpText() {
   return [
     "<b>Perintah SakuBot</b>",
+    "/hari_ini — ringkasan transaksi hari ini",
+    "/bulan_ini — ringkasan transaksi bulan ini",
+    "/kategori — pengeluaran terbesar per kategori",
     "/start — mulai dan lihat bantuan",
     "/help — daftar perintah",
     "/saldo — lihat saldo saat ini",
@@ -137,6 +190,7 @@ export async function POST(request: Request) {
     if (profileError) throw profileError;
 
     if (/^\/(start|help)(?:@\w+)?(?:\s|$)/i.test(text)) {
+      await registerBotCommands();
       await reply(chatId, profile
         ? `Halo! Akun SakuBot kamu sudah terhubung.\n\n${helpText()}`
         : `Halo! Saya bot pencatat keuangan SakuBot.\nTautkan akun dari dashboard dengan mengirim <code>/link KODE</code>.\n\n${helpText()}`);
@@ -174,6 +228,50 @@ export async function POST(request: Request) {
         sum + (item.transaction_type === "income" ? Number(item.amount) : -Number(item.amount)), 0);
       await reply(chatId, `💰 <b>Saldo saat ini</b>\n${formatRupiah(balance)}`);
       return Response.json({ ok: true, command: "balance" });
+    }
+
+    const periodCommand = text.match(/^\/(hari_ini|hariini|bulan_ini|bulanini)(?:@\w+)?\s*$/i);
+    if (periodCommand) {
+      const period: ReportPeriod = /bulan/i.test(periodCommand[1]) ? "month" : "day";
+      const { start, end, now } = jakartaPeriodBounds(period);
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("amount, transaction_type")
+        .eq("user_id", profile.id)
+        .gte("date", start)
+        .lt("date", end);
+      if (error) throw error;
+      const totals = (data ?? []).reduce((sum, item) => {
+        const amount = Number(item.amount);
+        if (item.transaction_type === "income") sum.income += amount;
+        else sum.expense += amount;
+        return sum;
+      }, { income: 0, expense: 0 });
+      const label = period === "day"
+        ? new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "full" }).format(now)
+        : new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", month: "long", year: "numeric" }).format(now);
+      const net = totals.income - totals.expense;
+      await reply(chatId, `<b>Ringkasan ${period === "day" ? "hari ini" : "bulan ini"}</b> · ${label}\nPemasukan: +${formatRupiah(totals.income)}\nPengeluaran: −${formatRupiah(totals.expense)}\nSelisih: ${net >= 0 ? "+" : "−"}${formatRupiah(Math.abs(net))}\nJumlah transaksi: ${data?.length ?? 0}`);
+      return Response.json({ ok: true, command: period === "day" ? "today" : "month" });
+    }
+
+    if (/^\/kategori(?:@\w+)?\s*$/i.test(text)) {
+      const { start, end } = jakartaPeriodBounds("month");
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("category, amount")
+        .eq("user_id", profile.id)
+        .eq("transaction_type", "expense")
+        .gte("date", start)
+        .lt("date", end);
+      if (error) throw error;
+      const totals = Object.entries((data ?? []).reduce<Record<string, number>>((acc, item) => {
+        acc[item.category] = (acc[item.category] ?? 0) + Number(item.amount);
+        return acc;
+      }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const lines = totals.map(([category, amount], index) => `${index + 1}. ${escapeHtml(category)} — ${formatRupiah(amount)}`);
+      await reply(chatId, lines.length ? `<b>Pengeluaran per kategori bulan ini</b>\n${lines.join("\n")}` : "Belum ada pengeluaran bulan ini.");
+      return Response.json({ ok: true, command: "categories" });
     }
 
     if (/^\/terakhir(?:@\w+)?\s*$/i.test(text)) {
