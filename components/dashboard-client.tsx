@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   ArrowDownRight,
@@ -43,21 +44,25 @@ export type DashboardTransaction = {
 const colors = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#8b5cf6"];
 const formatRupiah = (amount: number) => `Rp ${amount.toLocaleString("id-ID")}`;
 const navigationItems = [
-  { id: "dashboard", label: "Dashboard", icon: Home },
-  { id: "transactions", label: "Transaksi", icon: ArrowRightLeft },
-  { id: "charts", label: "Ringkasan", icon: PieChart },
-  { id: "telegram", label: "Integrasi", icon: LinkIcon },
-  { id: "settings", label: "Pengaturan", icon: Settings },
+  { id: "dashboard", href: "/", label: "Dashboard", icon: Home },
+  { id: "transactions", href: "/transactions", label: "Transaksi", icon: ArrowRightLeft },
+  { id: "summary", href: "/summary", label: "Ringkasan", icon: PieChart },
+  { id: "integrations", href: "/integrations", label: "Integrasi", icon: LinkIcon },
+  { id: "settings", href: "/settings", label: "Pengaturan", icon: Settings },
 ];
+
+export type DashboardPage = (typeof navigationItems)[number]["id"];
 
 export default function DashboardClient({
   transactions,
   account,
   loadError,
+  page,
 }: {
   transactions: DashboardTransaction[];
   account: { username: string; email: string };
   loadError?: string;
+  page: DashboardPage;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -73,7 +78,6 @@ export default function DashboardClient({
   const [telegramCode, setTelegramCode] = useState("");
   const [telegramMessage, setTelegramMessage] = useState("");
   const [telegramError, setTelegramError] = useState(false);
-  const [activeSection, setActiveSection] = useState("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [transactionQuery, setTransactionQuery] = useState("");
   const [transactionFilter, setTransactionFilter] = useState("all");
@@ -135,26 +139,7 @@ export default function DashboardClient({
     void refreshTelegramStatus();
   }, [refreshTelegramStatus]);
 
-  useEffect(() => {
-    const sections = navigationItems
-      .map(({ id }) => document.getElementById(id))
-      .filter((section): section is HTMLElement => section !== null);
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      if (visible) setActiveSection(visible.target.id);
-    }, { rootMargin: "-15% 0px -65% 0px", threshold: [0, 0.1, 0.3] });
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, []);
-
-  function navigateToSection(id: string) {
-    setActiveSection(id);
-    setMobileMenuOpen(false);
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.history.replaceState(null, "", `#${id}`);
-  }
+  const currentPage = navigationItems.find((item) => item.id === page) ?? navigationItems[0];
 
   async function createTelegramLinkCode() {
     setTelegramLoading(true);
@@ -265,18 +250,18 @@ export default function DashboardClient({
   return (
     <div className="min-h-screen bg-[#f5f7fb] font-sans text-slate-800">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200/80 bg-white md:flex">
-        <button type="button" onClick={() => navigateToSection("dashboard")} className="flex items-center gap-3 p-6 text-left">
+        <Link href="/" className="flex items-center gap-3 p-6 text-left">
           <div className="rounded-xl bg-indigo-600 p-2.5 shadow-lg shadow-indigo-200"><Wallet className="h-6 w-6 text-white" /></div>
           <span><span className="block text-xl font-bold tracking-tight">SakuBot</span><span className="block text-xs text-slate-400">Catat uang dengan rapi</span></span>
-        </button>
+        </Link>
         <p className="px-6 pb-2 pt-5 text-[11px] font-bold uppercase tracking-[.16em] text-slate-400">Menu utama</p>
         <nav aria-label="Navigasi utama" className="flex-1 space-y-1 px-3">
-          {navigationItems.map(({ id, label, icon: Icon }) => (
-            <a key={id} href={`#${id}`} onClick={(event) => { event.preventDefault(); navigateToSection(id); }} aria-current={activeSection === id ? "page" : undefined}
-              className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${activeSection === id ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}>
-              <Icon className={`h-[18px] w-[18px] ${activeSection === id ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600"}`} />{label}
-              {activeSection === id && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-600" />}
-            </a>
+          {navigationItems.map(({ id, href, label, icon: Icon }) => (
+            <Link key={id} href={href} aria-current={page === id ? "page" : undefined}
+              className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${page === id ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}>
+              <Icon className={`h-[18px] w-[18px] ${page === id ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600"}`} />{label}
+              {page === id && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-600" />}
+            </Link>
           ))}
         </nav>
         <div className="m-3 rounded-2xl bg-slate-50 p-3">
@@ -295,25 +280,28 @@ export default function DashboardClient({
             <button type="button" aria-label={mobileMenuOpen ? "Tutup menu" : "Buka menu"} aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm md:hidden">
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
-            <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-indigo-600">SakuBot</p><h2 className="text-2xl font-bold tracking-tight">Dashboard</h2></div>
+            <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-indigo-600">SakuBot</p><h2 className="text-2xl font-bold tracking-tight">{currentPage.label}</h2></div>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <button type="button" onClick={() => navigateToSection("telegram")} className="hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:flex"><Send className="h-4 w-4" />Input via Telegram</button>
+            <Link href="/integrations" className="hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:flex"><Send className="h-4 w-4" />Input via Telegram</Link>
             <div className="hidden font-medium capitalize text-slate-500 sm:block">{now.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</div>
-            <button type="button" onClick={() => navigateToSection("settings")} className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-left shadow-sm transition hover:border-indigo-200 sm:flex">
+            <Link href="/settings" className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-left shadow-sm transition hover:border-indigo-200 sm:flex">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold uppercase text-indigo-700">{account.username.slice(0, 1)}</div>
               <div className="leading-tight"><p className="text-sm font-semibold text-slate-800">@{account.username}</p><p className="max-w-48 truncate text-xs text-slate-500">{account.email}</p></div>
-            </button>
+            </Link>
           </div>
         </header>
 
         {mobileMenuOpen && <nav aria-label="Navigasi utama" className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/60 md:hidden">
-          {navigationItems.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} onClick={(event) => { event.preventDefault(); navigateToSection(id); }} className={`flex items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold ${activeSection === id ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="h-4 w-4" />{label}</a>)}
+          {navigationItems.map(({ id, href, label, icon: Icon }) => <Link key={id} href={href} onClick={() => setMobileMenuOpen(false)} aria-current={page === id ? "page" : undefined} className={`flex items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold ${page === id ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="h-4 w-4" />{label}</Link>)}
         </nav>}
 
         {loadError && <div role="status" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{loadError}</div>}
 
-        <section id="dashboard" aria-label="Saldo dan akun" className="mb-8 scroll-mt-8 grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="mb-7"><p className="text-sm text-slate-500">{page === "dashboard" ? "Pantau kondisi keuanganmu dalam satu ringkasan." : page === "transactions" ? "Catat dan kelola semua pemasukan serta pengeluaran." : page === "summary" ? "Pahami pola pengeluaran dan pemasukanmu." : page === "integrations" ? "Hubungkan SakuBot dengan Telegram untuk mencatat lewat chat." : "Atur akun dan koneksi SakuBot milikmu."}</p></div>
+
+        {page === "dashboard" && <>
+        <section aria-label="Saldo dan akun" className="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-3">
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-700 p-6 text-white shadow-lg shadow-indigo-200 lg:col-span-2">
             <div className="absolute -right-8 -top-16 h-52 w-52 rounded-full border-[28px] border-white/10" />
             <div className="relative flex items-start justify-between gap-4">
@@ -327,49 +315,6 @@ export default function DashboardClient({
           </div>
         </section>
 
-        <section id="telegram" className="mb-8 scroll-mt-8 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold">Hubungkan Telegram</h3>
-              <p className="mt-1 max-w-2xl text-sm text-slate-500">Hubungkan bot secara pribadi agar catatan Telegram tersimpan di akun ini dan masuk ke perhitungan saldo.</p>
-              <p role="status" className={`mt-3 text-sm font-medium ${telegramError ? "text-red-600" : telegramLinked ? "text-emerald-700" : "text-slate-600"}`}>{telegramMessage || (telegramLoading ? "Memeriksa koneksi..." : "")}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={createTelegramLinkCode} disabled={telegramLoading} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{telegramLoading ? "Memproses..." : telegramLinked ? "Tautkan ulang Telegram" : "Buat kode tautan"}</button>
-              <button type="button" onClick={refreshTelegramStatus} disabled={telegramLoading} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Saya sudah kirim, cek koneksi</button>
-            </div>
-          </div>
-          {telegramCode && <div className="mt-4 rounded-xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-600">Kirim perintah ini sebagai pesan pribadi ke bot Telegram dalam 10 menit:</p>
-            <code className="mt-2 block select-all rounded-lg border border-slate-200 bg-white px-4 py-3 font-mono text-base font-bold tracking-widest text-indigo-700">/link {telegramCode}</code>
-            <p className="mt-2 text-xs text-slate-500">Setelah bot menerima perintah, tekan “Saya sudah kirim, cek koneksi”.</p>
-          </div>}
-          {telegramLinked && <p className="mt-3 text-xs text-slate-500">Untuk mencatat transaksi, kirim contoh: /expense 25000 | Makan siang | Makanan</p>}
-        </section>
-
-        <section id="add-transaction" className="mb-8 scroll-mt-8 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40">
-          <h3 className="mb-4 text-lg font-bold">Tambah transaksi</h3>
-          <form onSubmit={addTransaction} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <label className="text-sm font-medium text-slate-600">Jenis
-              <select name="transactionType" className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-slate-800" defaultValue="expense">
-                <option value="expense">Pengeluaran</option>
-                <option value="income">Pemasukan</option>
-              </select>
-            </label>
-            <label className="text-sm font-medium text-slate-600">Nominal (Rp)
-              <input name="amount" type="number" min="1" step="1" required placeholder="50000" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800" />
-            </label>
-            <label className="text-sm font-medium text-slate-600">Deskripsi
-              <input name="description" maxLength={200} required placeholder="Contoh: Gaji bulanan" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800" />
-            </label>
-            <label className="text-sm font-medium text-slate-600">Kategori
-              <input name="category" maxLength={80} required placeholder="Contoh: Gaji" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800" />
-            </label>
-            <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2.5 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Menyimpan..." : "Tambah"}</button>
-          </form>
-          {formMessage && <p role="status" className={`mt-3 text-sm ${formError ? "text-red-600" : "text-emerald-600"}`}>{formMessage}</p>}
-        </section>
-
         <section aria-label="Ringkasan bulan ini" className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"><div className="mb-4 flex items-center justify-between text-slate-500"><span className="font-medium">Pemasukan bulan ini</span><ArrowDownRight className="h-5 w-5 rotate-180 text-emerald-500" /></div><div className="text-2xl font-bold text-emerald-600">{formatRupiah(incomeTotal)}</div></div>
           <div className="flex flex-col justify-between rounded-2xl bg-red-500 p-6 text-white shadow-sm"><div className="mb-4 flex items-center justify-between text-red-100"><span className="font-medium">Pengeluaran bulan ini</span><ArrowDownRight className="h-5 w-5" /></div><div className="text-2xl font-bold">{formatRupiah(expenseTotal)}</div></div>
@@ -377,7 +322,39 @@ export default function DashboardClient({
           <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm"><div className="mb-4 flex items-center justify-between text-slate-500"><span className="font-medium">Transaksi bulan ini</span><ArrowRightLeft className="h-5 w-5" /></div><div className="text-2xl font-bold">{monthTransactions.length}</div></div>
         </section>
 
-        <section id="charts" className="mb-8 scroll-mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm shadow-slate-200/40">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-6"><div><h3 className="text-lg font-bold">Aktivitas terbaru</h3><p className="mt-1 text-sm text-slate-500">Catatan terakhir yang masuk ke akunmu.</p></div><Link href="/transactions" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Lihat semua transaksi →</Link></div>
+          {transactions.length ? <ul className="divide-y divide-slate-100">{transactions.slice(0, 5).map((tx) => <li key={tx.id} className="flex items-center justify-between gap-4 px-6 py-4"><div className="flex min-w-0 items-center gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tx.transactionType === "income" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>{tx.transactionType === "income" ? "+" : "−"}</span><div className="min-w-0"><p className="truncate text-sm font-semibold">{tx.description}</p><p className="mt-0.5 text-xs text-slate-500">{tx.category} · {new Date(tx.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</p></div></div><span className={`whitespace-nowrap text-sm font-bold ${tx.transactionType === "income" ? "text-emerald-600" : "text-slate-800"}`}>{tx.transactionType === "income" ? "+" : "−"}{formatRupiah(tx.amount)}</span></li>)}</ul> : <div className="p-8 text-center text-sm text-slate-500">Belum ada catatan. Tambahkan transaksi pertamamu di menu Transaksi.</div>}
+        </section>
+        </>}
+
+        {page === "integrations" && <>
+        <section className="mb-6 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40">
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div className="max-w-2xl"><div className="flex items-center gap-3"><div className="rounded-xl bg-sky-50 p-3 text-sky-600"><Send className="h-6 w-6" /></div><div><h3 className="text-lg font-bold">Bot Telegram</h3><p className="text-sm text-slate-500">Catat uang dengan mengirim pesan pribadi ke bot.</p></div></div>
+              <p role="status" className={`mt-4 text-sm font-medium ${telegramError ? "text-red-600" : telegramLinked ? "text-emerald-700" : "text-slate-600"}`}>{telegramMessage || (telegramLoading ? "Memeriksa koneksi..." : "")}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={createTelegramLinkCode} disabled={telegramLoading} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50">{telegramLoading ? "Memproses..." : telegramLinked ? "Buat kode tautan baru" : "Hubungkan Telegram"}</button>
+              <button type="button" onClick={refreshTelegramStatus} disabled={telegramLoading} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">Periksa koneksi</button>
+            </div>
+          </div>
+          {telegramCode && <div className="mt-5 rounded-xl border border-indigo-100 bg-indigo-50/70 p-4"><p className="text-sm text-slate-700">Kirim sebagai pesan pribadi ke bot dalam 10 menit:</p><code className="mt-2 block select-all rounded-lg border border-indigo-100 bg-white px-4 py-3 font-mono text-base font-bold tracking-widest text-indigo-700">/link {telegramCode}</code><p className="mt-2 text-xs text-slate-500">Setelah dikirim, klik “Periksa koneksi”.</p></div>}
+          {telegramLinked && <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800"><b>Sudah terhubung.</b> Catat transaksi lewat chat, atau kirim <code>/unlink</code> ke bot untuk memutus koneksi.</div>}
+        </section>
+        <section className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40"><h3 className="text-lg font-bold">Perintah bot</h3><p className="mt-1 text-sm text-slate-500">Pakai perintah ini di chat pribadi dengan bot SakuBot.</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{[
+          ["/saldo", "Lihat saldo saat ini"], ["/terakhir", "Lihat 5 transaksi terbaru"], ["/expense 25000 | Makan siang | Makanan", "Catat pengeluaran"], ["/income 500000 | Uang mingguan | Pemasukan", "Catat pemasukan"], ["/unlink", "Putuskan akun Telegram"],
+        ].map(([command, description]) => <div key={command} className="flex flex-col gap-1 rounded-xl bg-slate-50 p-4"><code className="break-all text-sm font-semibold text-indigo-700">{command}</code><span className="text-xs text-slate-500">{description}</span></div>)}</div><p className="mt-4 text-xs text-slate-500">Format singkat pengeluaran juga didukung, misalnya <code>makan siang 25000</code>.</p></section>
+        </>}
+
+        {page === "summary" && <>
+        <section aria-label="Ringkasan bulan ini" className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm"><div className="mb-4 flex items-center justify-between text-slate-500"><span className="font-medium">Pemasukan bulan ini</span><ArrowDownRight className="h-5 w-5 rotate-180 text-emerald-500" /></div><div className="text-2xl font-bold text-emerald-600">{formatRupiah(incomeTotal)}</div></div>
+          <div className="flex flex-col justify-between rounded-2xl border border-rose-100 bg-rose-50 p-6"><div className="mb-4 flex items-center justify-between text-rose-600"><span className="font-medium">Pengeluaran bulan ini</span><ArrowDownRight className="h-5 w-5" /></div><div className="text-2xl font-bold text-rose-700">{formatRupiah(expenseTotal)}</div></div>
+          <div className="flex flex-col justify-between rounded-2xl bg-indigo-600 p-6 text-white shadow-sm"><div className="mb-4 flex items-center justify-between text-indigo-100"><span className="font-medium">Selisih bulan ini</span><Wallet className="h-5 w-5" /></div><div className="text-2xl font-bold">{formatRupiah(netTotal)}</div></div>
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm"><div className="mb-4 flex items-center justify-between text-slate-500"><span className="font-medium">Jumlah catatan</span><ArrowRightLeft className="h-5 w-5" /></div><div className="text-2xl font-bold">{monthTransactions.length}</div></div>
+        </section>
+        <section className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm lg:col-span-2"><h3 className="mb-6 text-lg font-bold">Tren pengeluaran bulan ini</h3><div className="h-64">
             {daily.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={daily}><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} /><Tooltip formatter={(value) => [formatRupiah(Number(value)), "Pengeluaran"]} /><Line type="monotone" dataKey="total" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4 }} /></LineChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-slate-400">Belum ada pengeluaran bulan ini</div>}
           </div></div>
@@ -385,11 +362,24 @@ export default function DashboardClient({
             {categories.length ? <><ResponsiveContainer width="100%" height="100%"><RechartsPie><Pie data={categories} innerRadius={52} outerRadius={78} paddingAngle={2} dataKey="value">{categories.map((entry) => <Cell key={entry.name} fill={entry.color} />)}</Pie><Tooltip formatter={(value) => formatRupiah(Number(value))} /></RechartsPie></ResponsiveContainer><div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-xs text-slate-400">Pengeluaran</span><span className="text-sm font-bold">{formatRupiah(expenseTotal)}</span></div></> : <div className="flex h-full items-center justify-center text-sm text-slate-400">Belum ada data</div>}
           </div><div className="mt-4 flex flex-wrap justify-center gap-3">{categories.map((item) => <div key={item.name} className="flex items-center gap-1.5 text-xs font-medium text-slate-600"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</div>)}</div></div>
         </section>
+        <section className="mb-8 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40"><h3 className="text-lg font-bold">Rincian kategori</h3><p className="mt-1 text-sm text-slate-500">Kontribusi tiap kategori pada total pengeluaran bulan ini.</p>{categories.length ? <div className="mt-5 space-y-4">{categories.map((item) => <div key={item.name}><div className="mb-1.5 flex justify-between gap-3 text-sm"><span className="font-medium">{item.name}</span><span className="text-slate-500">{formatRupiah(item.value)} · {expenseTotal ? Math.round((item.value / expenseTotal) * 100) : 0}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${expenseTotal ? (item.value / expenseTotal) * 100 : 0}%`, backgroundColor: item.color }} /></div></div>)}</div> : <div className="mt-5 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Belum ada pengeluaran untuk diringkas.</div>}</section>
+        </>}
 
-        <section id="transactions" className="mb-8 scroll-mt-8 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm shadow-slate-200/40"><div className="border-b border-slate-100 p-6"><h3 className="text-lg font-bold">Transaksi</h3><p className="mt-1 text-sm text-slate-500">Cari, filter, dan kelola catatan keuanganmu.</p>{deleteMessage && <p role="status" className={`mt-2 text-sm ${deleteError ? "text-red-600" : "text-emerald-600"}`}>{deleteMessage}</p>}</div><div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 p-4 sm:flex-row">
+        {page === "transactions" && <>
+        <section className="mb-8 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40">
+          <div className="mb-5"><h3 className="text-lg font-bold">Tambah transaksi</h3><p className="mt-1 text-sm text-slate-500">Masukkan pemasukan atau pengeluaran baru.</p></div>
+          <form id="transaction-form" onSubmit={addTransaction} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <label className="text-sm font-medium text-slate-600">Jenis<select name="transactionType" className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-slate-800" defaultValue="expense"><option value="expense">Pengeluaran</option><option value="income">Pemasukan</option></select></label>
+            <label className="text-sm font-medium text-slate-600">Nominal (Rp)<input name="amount" type="number" min="1" step="1" required placeholder="50000" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800" /></label>
+            <label className="text-sm font-medium text-slate-600">Deskripsi<input name="description" maxLength={200} required placeholder="Contoh: Gaji bulanan" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800" /></label>
+            <label className="text-sm font-medium text-slate-600">Kategori<input name="category" maxLength={80} required placeholder="Contoh: Gaji" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800" /></label>
+            <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2.5 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Menyimpan..." : "Tambah transaksi"}</button>
+          </form>{formMessage && <p role="status" className={`mt-3 text-sm ${formError ? "text-red-600" : "text-emerald-600"}`}>{formMessage}</p>}
+        </section>
+        <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm shadow-slate-200/40"><div className="border-b border-slate-100 p-6"><h3 className="text-lg font-bold">Semua transaksi</h3><p className="mt-1 text-sm text-slate-500">Cari, filter, edit, atau hapus catatanmu.</p>{deleteMessage && <p role="status" className={`mt-2 text-sm ${deleteError ? "text-red-600" : "text-emerald-600"}`}>{deleteMessage}</p>}</div><div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 p-4 sm:flex-row">
           <input aria-label="Cari transaksi" value={transactionQuery} onChange={(event) => setTransactionQuery(event.target.value)} placeholder="Cari deskripsi atau kategori..." className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
           <select aria-label="Filter jenis transaksi" value={transactionFilter} onChange={(event) => setTransactionFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"><option value="all">Semua transaksi</option><option value="expense">Pengeluaran</option><option value="income">Pemasukan</option></select>
-          <button type="button" onClick={() => navigateToSection("add-transaction")} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">+ Tambah transaksi</button>
+          <button type="button" onClick={() => document.getElementById("transaction-form")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">+ Tambah transaksi</button>
         </div><div className="overflow-x-auto"><table className="w-full border-collapse text-left"><thead><tr className="bg-slate-50 text-sm text-slate-500"><th className="px-6 py-4 font-medium">Tanggal</th><th className="px-6 py-4 font-medium">Deskripsi</th><th className="px-6 py-4 font-medium">Kategori</th><th className="px-6 py-4 font-medium">Nominal</th><th className="px-6 py-4 font-medium">Sumber</th><th className="px-6 py-4 text-right font-medium">Aksi</th></tr></thead><tbody className="text-sm">
           {visibleTransactions.length ? visibleTransactions.map((tx) => editingId === tx.id ? (
             <tr key={tx.id} className="border-b border-indigo-100 bg-indigo-50/50"><td colSpan={6} className="p-4">
@@ -403,6 +393,8 @@ export default function DashboardClient({
             </td></tr>
           ) : <tr key={tx.id} className="border-b border-slate-50 hover:bg-slate-50"><td className="whitespace-nowrap px-6 py-4 text-slate-500">{new Date(tx.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</td><td className="px-6 py-4 font-medium">{tx.description}</td><td className="px-6 py-4 text-slate-600">{tx.category} <span className="ml-1 text-xs text-slate-400">| {tx.transactionType === "income" ? "Pemasukan" : "Pengeluaran"}</span></td><td className={`whitespace-nowrap px-6 py-4 font-semibold ${tx.transactionType === "income" ? "text-emerald-600" : "text-red-500"}`}>{tx.transactionType === "income" ? "+" : "-"} {formatRupiah(tx.amount)}</td><td className="whitespace-nowrap px-6 py-4"><span className="flex items-center gap-1.5 text-slate-600">{tx.source === "Telegram" ? <Send className="h-4 w-4 text-blue-500" /> : <CheckCircle2 className="h-4 w-4 text-emerald-500" />}{tx.source}</span></td><td className="px-6 py-3 text-right"><div className="inline-flex items-center"><button type="button" onClick={() => { setDeleteMessage(""); setEditingId(tx.id); }} aria-label={`Edit transaksi ${tx.description}`} title="Edit transaksi" className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"><Pencil className="h-4 w-4" /></button><button type="button" onClick={() => deleteTransaction(tx)} disabled={deletingId === tx.id || editingId === tx.id} aria-label={`Hapus transaksi ${tx.description}`} title="Hapus transaksi" className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"><Trash2 className="h-4 w-4" /></button></div></td></tr>) : <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-400">{transactions.length ? "Tidak ada transaksi yang cocok dengan pencarian atau filter." : "Belum ada transaksi. Tambahkan lewat formulir di atas atau Telegram."}</td></tr>}
         </tbody></table></div></section>
+        </>}
+        {page === "settings" && <>
         <section id="settings" className="scroll-mt-8 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm shadow-slate-200/40">
           <div className="mb-5"><h3 className="text-lg font-bold">Pengaturan</h3><p className="mt-1 text-sm text-slate-500">Kelola akun dan preferensi pencatatanmu.</p></div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -414,10 +406,11 @@ export default function DashboardClient({
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
               <div className="flex items-start gap-3"><div className="rounded-xl bg-emerald-100 p-2.5 text-emerald-700"><Wallet className="h-5 w-5" /></div><div><h4 className="font-semibold">Preferensi pencatatan</h4><p className="mt-1 text-sm text-slate-500">Semua nominal disimpan sebagai rupiah Indonesia.</p></div></div>
               <dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-slate-500">Mata uang</dt><dd className="font-semibold">Rupiah (IDR)</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-500">Zona waktu tampilan</dt><dd className="font-semibold">Waktu lokal</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-500">Telegram</dt><dd className={`font-semibold ${telegramLinked ? "text-emerald-700" : "text-slate-500"}`}>{telegramLinked ? "Terhubung" : "Belum terhubung"}</dd></div></dl>
-              <button type="button" onClick={() => navigateToSection("telegram")} className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">Kelola integrasi Telegram</button>
+              <Link href="/integrations" className="mt-5 inline-flex rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">Kelola integrasi Telegram</Link>
             </div>
           </div>
         </section>
+        </>}
         <footer className="py-8 text-center text-xs text-slate-400">SakuBot · Catat uang dengan rapi</footer>
         </div>
       </main>
