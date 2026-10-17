@@ -139,6 +139,20 @@ export default function DashboardClient({
     void refreshTelegramStatus();
   }, [refreshTelegramStatus]);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
+
   const currentPage = navigationItems.find((item) => item.id === page) ?? navigationItems[0];
 
   async function createTelegramLinkCode() {
@@ -292,9 +306,22 @@ export default function DashboardClient({
           </div>
         </header>
 
-        {mobileMenuOpen && <nav aria-label="Navigasi utama" className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/60 md:hidden">
-          {navigationItems.map(({ id, href, label, icon: Icon }) => <Link key={id} href={href} onClick={() => setMobileMenuOpen(false)} aria-current={page === id ? "page" : undefined} className={`flex items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold ${page === id ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="h-4 w-4" />{label}</Link>)}
-        </nav>}
+        <div aria-hidden={!mobileMenuOpen} inert={!mobileMenuOpen} className="fixed inset-0 z-50 md:hidden">
+          <button type="button" aria-label="Tutup menu navigasi" tabIndex={mobileMenuOpen ? 0 : -1} onClick={() => setMobileMenuOpen(false)} className={`absolute inset-0 h-full w-full bg-slate-950/45 transition-opacity duration-300 ${mobileMenuOpen ? "opacity-100" : "pointer-events-none opacity-0"}`} />
+          <aside role="dialog" aria-modal={mobileMenuOpen} aria-label="Menu navigasi SakuBot" className={`absolute inset-y-0 left-0 flex w-[min(86vw,340px)] flex-col rounded-r-[28px] bg-white shadow-2xl shadow-slate-950/20 transition-transform duration-300 ease-out ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
+              <Link href="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3"><span className="rounded-xl bg-indigo-600 p-2.5 shadow-md shadow-indigo-200"><Wallet className="h-5 w-5 text-white" /></span><span><span className="block font-bold">SakuBot</span><span className="block text-xs text-slate-400">Menu utama</span></span></Link>
+              <button type="button" aria-label="Tutup menu" onClick={() => setMobileMenuOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-slate-500 transition hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </div>
+            <nav aria-label="Navigasi utama" className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
+              {navigationItems.map(({ id, href, label, icon: Icon }) => <Link key={id} href={href} onClick={() => setMobileMenuOpen(false)} aria-current={page === id ? "page" : undefined} className={`flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-semibold transition ${page === id ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}><span className={`flex h-9 w-9 items-center justify-center rounded-lg ${page === id ? "bg-white text-indigo-600 shadow-sm" : "bg-slate-50 text-slate-500"}`}><Icon className="h-[18px] w-[18px]" /></span>{label}{page === id && <span className="ml-auto h-2 w-2 rounded-full bg-indigo-600" />}</Link>)}
+            </nav>
+            <div className="border-t border-slate-100 p-4">
+              <div className="mb-3 flex items-center gap-3 rounded-2xl bg-slate-50 p-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 font-bold uppercase text-indigo-700">{account.username.slice(0, 1)}</div><div className="min-w-0"><p className="truncate text-sm font-semibold">@{account.username}</p><p className="truncate text-xs text-slate-500">{account.email}</p></div></div>
+              <form action="/api/auth/sign-out" method="post"><button className="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"><LogOut className="h-4 w-4" />Keluar dari akun</button></form>
+            </div>
+          </aside>
+        </div>
 
         {loadError && <div role="status" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{loadError}</div>}
 
